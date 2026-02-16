@@ -20,7 +20,7 @@ public class ProjectsController : ControllerBase
         _context = context;
     }
 
-    // GET: api/projects
+    // ================= GET ALL (MOJE PROJEKTY) =================
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ProjectDto>>> GetMyProjects()
     {
@@ -40,9 +40,34 @@ public class ProjectsController : ControllerBase
         return Ok(projects);
     }
 
-    // POST: api/projects
+    // ================= GET BY ID =================
+    [HttpGet("{id}")]
+    public async Task<ActionResult<ProjectDto>> GetById(int id)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var project = await _context.Projects
+            .Include(p => p.Tasks)
+            .Where(p =>
+                p.Id == id &&
+                (p.OwnerId == userId ||
+                 p.Tasks.Any(t => t.AssignedUserId == userId)))
+            .Select(p => new ProjectDto
+            {
+                Id = p.Id,
+                Name = p.Name
+            })
+            .FirstOrDefaultAsync();
+
+        if (project == null)
+            return NotFound();
+
+        return Ok(project);
+    }
+
+    // ================= CREATE =================
     [HttpPost]
-    public async Task<ActionResult<ProjectDto>> CreateProject(CreateProjectDto dto)
+    public async Task<ActionResult<ProjectDto>> Create(CreateProjectDto dto)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -61,6 +86,52 @@ public class ProjectsController : ControllerBase
             Name = project.Name
         };
 
-        return Ok(result);
+        return CreatedAtAction(nameof(GetById), new { id = project.Id }, result);
+    }
+
+    // ================= UPDATE =================
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, CreateProjectDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var project = await _context.Projects
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (project == null)
+            return NotFound();
+
+        if (project.OwnerId != userId)
+            return Forbid();
+
+        project.Name = dto.Name;
+
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    // ================= DELETE =================
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var project = await _context.Projects
+            .Include(p => p.Tasks)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (project == null)
+            return NotFound();
+
+        if (project.OwnerId != userId)
+            return Forbid();
+
+        _context.Tasks.RemoveRange(project.Tasks);
+        _context.Projects.Remove(project);
+
+        await _context.SaveChangesAsync();
+
+        return NoContent();
     }
 }

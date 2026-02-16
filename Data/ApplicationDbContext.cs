@@ -14,4 +14,20 @@ public class ApplicationDbContext
 
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
+
+        builder.Entity<Project>()
+            .HasOne<ApplicationUser>()
+            .WithMany(u => u.OwnedProjects)
+            .HasForeignKey(p => p.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<TaskItem>()
+            .HasOne(t => t.AssignedUser)
+            .WithMany(u => u.AssignedTasks)
+            .HasForeignKey(t => t.AssignedUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
 }
